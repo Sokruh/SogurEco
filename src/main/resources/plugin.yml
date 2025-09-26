@@ -1,0 +1,9 @@
+name: SogurEco
+version: '1.0-SNAPSHOT'
+depend:
+  - Vault
+main: sogur.dev.sogurEco.SogurEco
+api-version: '1.21'
+prefix: SogurEco
+authors: [ Sogur ]
+description: A customizable Economy plugin using the VaultAPI
