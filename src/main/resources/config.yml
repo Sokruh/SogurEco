@@ -1,18 +1,18 @@
 database:
   type: sqlite          # sqlite | mysql | postgres
   sqlite:
-    file: plugins/MyEconomy/economy.db
+    file: plugins/SogurEco/economy.db
   mysql:
     host: localhost
     port: 3306
-    database: myeconomy
+    database: sogureco
     username: root
     password: secret
     useSSL: false
   postgres:
     host: localhost
     port: 5432
-    database: myeconomy
+    database: sogureco
     username: postgres
     password: secret
 

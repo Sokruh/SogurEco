@@ -3,6 +3,9 @@ package sogur.dev.sogurEco;
 import net.milkbowl.vault.economy.Economy;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
+import sogur.dev.sogurEco.db.DatabaseManager;
+
+import java.util.Map;
 
 import static org.bukkit.Bukkit.getServer;
 
@@ -12,6 +15,11 @@ public final class SogurEco extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        getConfig().options().copyDefaults();
+        saveDefaultConfig();
+
+        Map<String, Object> dbConfig = getConfig().getConfigurationSection("database").getValues(false);
+        DatabaseManager dbm = new DatabaseManager(this, dbConfig);
         if (!setupEconomy() ) {
             getLogger().severe(String.format("[%s] - Disabled due to no Vault dependency found!", getDescription().getName()));
             getServer().getPluginManager().disablePlugin(this);
