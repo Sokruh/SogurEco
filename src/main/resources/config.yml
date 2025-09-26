@@ -1,0 +1,22 @@
+database:
+  type: sqlite          # sqlite | mysql | postgres
+  sqlite:
+    file: plugins/MyEconomy/economy.db
+  mysql:
+    host: localhost
+    port: 3306
+    database: myeconomy
+    username: root
+    password: secret
+    useSSL: false
+  postgres:
+    host: localhost
+    port: 5432
+    database: myeconomy
+    username: postgres
+    password: secret
+
+# other plugin config...
+currency:
+  symbol: "$"
+  decimals: 2

@@ -14,8 +14,7 @@ public class SogurEconomy implements Economy {
 
     @Override
     public String getName() {
-        // configista
-        return "";
+        return "Sogur";
     }
 
     @Override
