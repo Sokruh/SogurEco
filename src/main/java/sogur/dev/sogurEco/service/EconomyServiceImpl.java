@@ -21,7 +21,6 @@ public class EconomyServiceImpl implements EconomyService{
     public TransactionResult deposit(UUID playerUuid, BigDecimal amount, TransactionContext context) {
         return null;
     }
-
     @Override
     public TransactionResult withdraw(UUID playerUuid, BigDecimal amount, TransactionContext context) {
         return null;

@@ -1,20 +1,12 @@
 database:
-  type: sqlite          # sqlite | mysql | postgres
-  sqlite:
-    file: plugins/SogurEco/economy.db
-  mysql:
-    host: localhost
-    port: 3306
-    database: sogureco
-    username: root
-    password: secret
-    useSSL: false
-  postgres:
-    host: localhost
-    port: 5432
-    database: sogureco
-    username: postgres
-    password: secret
+  type: "sqlite" # Options: sqlite, mysql, mariadb, postgresql
+
+  # Only used for MySQL/MariaDB/PostgreSQL
+  host: "localhost"
+  port: 3306
+  name: "sogureco"
+  user: "root"
+  password: "password"
 
 # other plugin config...
 currency:

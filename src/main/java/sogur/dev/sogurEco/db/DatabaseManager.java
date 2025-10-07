@@ -2,104 +2,125 @@ package sogur.dev.sogurEco.db;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.flywaydb.core.Flyway;
-import org.bukkit.plugin.Plugin;
 
 import javax.sql.DataSource;
-import java.nio.file.Path;
-import java.util.Map;
-import java.util.Objects;
+import java.io.File;
+import java.sql.Connection;
+import java.sql.SQLException;
 
 public class DatabaseManager {
-    private final Plugin plugin;
-    private final HikariDataSource ds;
-    private final String dbType;
 
-    public DatabaseManager(Plugin plugin, Map<String, Object> dbConfig) {
+    private final JavaPlugin plugin;
+    private final DatabaseType type;
+    private HikariDataSource dataSource;
+
+    public DatabaseManager(JavaPlugin plugin, DatabaseType type) {
         this.plugin = plugin;
-        this.dbType = Objects.toString(dbConfig.getOrDefault("type", "sqlite"));
-
-        HikariConfig cfg = new HikariConfig();
-        cfg.setMaximumPoolSize(10);
-        cfg.setMinimumIdle(2);
-        cfg.setPoolName("MyEconomyHikariPool");
-
-        String jdbcUrl;
-        String username = null;
-        String password = null;
-
-        switch (dbType.toLowerCase()) {
-            case "mysql":
-            case "mariadb":
-                Map<String, Object> my = (Map<String, Object>) dbConfig.get("mysql");
-                String host = Objects.toString(my.get("host"), "localhost");
-                int port = Integer.parseInt(Objects.toString(my.get("port"), "3306"));
-                String database = Objects.toString(my.get("database"), "sogureco");
-                username = Objects.toString(my.get("username"), "root");
-                password = Objects.toString(my.get("password"), "");
-                jdbcUrl = String.format("jdbc:mysql://%s:%d/%s?useSSL=%s&serverTimezone=UTC",
-                        host, port, database, Objects.toString(my.get("useSSL"), "false"));
-                cfg.setDriverClassName("com.mysql.cj.jdbc.Driver");
-                break;
-
-            case "postgres":
-            case "postgresql":
-                Map<String, Object> pg = (Map<String, Object>) dbConfig.get("postgres");
-                host = Objects.toString(pg.get("host"), "localhost");
-                port = Integer.parseInt(Objects.toString(pg.get("port"), "5432"));
-                database = Objects.toString(pg.get("database"), "sogureco");
-                username = Objects.toString(pg.get("username"), "postgres");
-                password = Objects.toString(pg.get("password"), "");
-                jdbcUrl = String.format("jdbc:postgresql://%s:%d/%s", host, port, database);
-                cfg.setDriverClassName("org.postgresql.Driver");
-                break;
-
-            case "sqlite":
-            default:
-                Map<String, Object> sq = (Map<String, Object>) dbConfig.get("sqlite");
-                String file = Objects.toString(sq.get("file"), plugin.getDataFolder().getAbsolutePath() + "/economy.db");
-                Path fp = plugin.getDataFolder().toPath().resolve(file);
-                // if supplied path already absolute, use it directly:
-                String pathString = fp.toAbsolutePath().toString();
-                jdbcUrl = "jdbc:sqlite:" + pathString;
-                // SQLite driver picks up automatically; no username/password
-                break;
-        }
-
-        cfg.setJdbcUrl(jdbcUrl);
-        if (username != null) cfg.setUsername(username);
-        if (password != null) cfg.setPassword(password);
-        // Additional Hikari settings (timeouts) can be set here
-        cfg.addDataSourceProperty("cachePrepStmts", "true");
-        cfg.addDataSourceProperty("prepStmtCacheSize", "250");
-        cfg.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
-
-        this.ds = new HikariDataSource(cfg);
-
-        // Run Flyway migrations
-        runMigrations();
+        this.type = type;
     }
 
-    private void runMigrations() {
-        // Flyway locations: common + db-specific (if you organized that way)
-        String[] locations = new String[] { "classpath:db/migration" };
-        Flyway flyway = Flyway.configure()
-                .dataSource(this.ds)
-                .locations(locations)
-                .load();
+    public void init() {
+        HikariConfig config = new HikariConfig();
 
-        plugin.getLogger().info("Running DB migrations (Flyway) for " + dbType);
-        flyway.migrate();
+        // 🔧 Build JDBC connection string based on type
+        switch (type) {
+            case MYSQL, MARIADB -> {
+                String host = plugin.getConfig().getString("database.host");
+                int port = plugin.getConfig().getInt("database.port");
+                String db = plugin.getConfig().getString("database.name");
+                String user = plugin.getConfig().getString("database.user");
+                String pass = plugin.getConfig().getString("database.password");
+
+                String jdbcType = (type == DatabaseType.MARIADB ? "mariadb" : "mysql");
+                config.setJdbcUrl("jdbc:" + jdbcType + "://" + host + ":" + port + "/" + db +
+                        "?useSSL=false&autoReconnect=true&allowPublicKeyRetrieval=true");
+                config.setUsername(user);
+                config.setPassword(pass);
+            }
+
+            case POSTGRESQL -> {
+                String host = plugin.getConfig().getString("database.host");
+                int port = plugin.getConfig().getInt("database.port");
+                String db = plugin.getConfig().getString("database.name");
+                String user = plugin.getConfig().getString("database.user");
+                String pass = plugin.getConfig().getString("database.password");
+
+                config.setJdbcUrl("jdbc:postgresql://" + host + ":" + port + "/" + db);
+                config.setUsername(user);
+                config.setPassword(pass);
+            }
+
+            case SQLITE -> {
+                File dbFile = new File(plugin.getDataFolder(), "economy.db");
+                config.setJdbcUrl("jdbc:sqlite:" + dbFile.getAbsolutePath());
+            }
+        }
+
+        config.setMaximumPoolSize(10);
+        config.setConnectionTimeout(10000);
+        config.setLeakDetectionThreshold(60000);
+        config.setPoolName("SogurEcoPool");
+
+        // 🧩 Initialize with retry logic
+        int maxRetries = 3;
+        int retryDelay = 5000; // milliseconds
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                this.dataSource = new HikariDataSource(config);
+
+                plugin.getLogger().info("Attempting to connect to " + type + " database... (Attempt " + attempt + ")");
+                if (testConnection()) {
+                    plugin.getLogger().info("Connected to " + type + " database successfully!");
+                    break;
+                }
+            } catch (Exception e) {
+                plugin.getLogger().warning("Database connection attempt " + attempt + " failed: " + e.getMessage());
+            }
+
+            if (attempt < maxRetries) {
+                plugin.getLogger().info("Retrying in " + (retryDelay / 1000) + " seconds...");
+                try {
+                    Thread.sleep(retryDelay);
+                } catch (InterruptedException ignored) {}
+            } else {
+                plugin.getLogger().severe("❌ Failed to connect to the database after " + maxRetries + " attempts!");
+                return;
+            }
+        }
+
+        // 🪶 Run Flyway migrations after successful connection
+        try {
+            Flyway flyway = Flyway.configure()
+                    .dataSource(dataSource)
+                    .locations("classpath:me/sokruh/sogureco/database/migrations")
+                    .load();
+            flyway.migrate();
+            plugin.getLogger().info("✅ Flyway migrations completed.");
+        } catch (Exception e) {
+            plugin.getLogger().severe("❌ Failed to run Flyway migrations!");
+            e.printStackTrace();
+        }
     }
 
     public DataSource getDataSource() {
-        return ds;
+        return dataSource;
     }
 
     public void close() {
-        if (ds != null && !ds.isClosed()) {
-            ds.close();
+        if (dataSource != null && !dataSource.isClosed()) {
+            dataSource.close();
+        }
+    }
+
+    public boolean testConnection() {
+        try (Connection conn = dataSource.getConnection()) {
+            return conn.isValid(2);
+        } catch (SQLException e) {
+            plugin.getLogger().warning("Database connection test failed: " + e.getMessage());
+            return false;
         }
     }
 }
-

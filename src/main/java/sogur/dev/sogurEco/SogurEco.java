@@ -3,8 +3,11 @@ package sogur.dev.sogurEco;
 import net.milkbowl.vault.economy.Economy;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
+import sogur.dev.sogurEco.dao.AccountDaoImpl;
 import sogur.dev.sogurEco.db.DatabaseManager;
+import sogur.dev.sogurEco.db.DatabaseType;
 
+import javax.sql.DataSource;
 import java.util.Map;
 
 import static org.bukkit.Bukkit.getServer;
@@ -12,11 +15,20 @@ import static org.bukkit.Bukkit.getServer;
 public final class SogurEco extends JavaPlugin {
 
     private static Economy econ = null;
+    AccountDaoImpl accountDao;
 
     @Override
     public void onEnable() {
         getConfig().options().copyDefaults();
         saveDefaultConfig();
+
+        DatabaseType dbType = DatabaseType.fromString(getConfig().getString("database.type"));
+        DatabaseManager databaseManager = new DatabaseManager(this, dbType);
+        databaseManager.init();
+
+        // Example: create DAO using this dataSource
+        DataSource ds = databaseManager.getDataSource();
+        accountDao = new AccountDaoImpl(ds);
 
         Map<String, Object> dbConfig = getConfig().getConfigurationSection("database").getValues(false);
         DatabaseManager dbm = new DatabaseManager(this, dbConfig);
