@@ -91,7 +91,6 @@ public class DatabaseManager {
             }
         }
 
-        // 🪶 Run Flyway migrations after successful connection
         try {
             Flyway flyway = Flyway.configure()
                     .dataSource(dataSource)
